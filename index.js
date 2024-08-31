@@ -24,7 +24,7 @@ const { config, updateConfig } = require('./config.js');
 const nbt = require('prismarine-nbt');
 const { sendFlip, giveTheFunStuff, updateSold } = require('./tpmWebsocket.js');
 
-let ign, bedSpam, discordid, TOS, webhook, usInstance, clickDelay, delay, usingBaf, session, /*discordbot,*/ badFinders, waittime, doNotList;
+let ign, bedSpam, discordid, TOS, webhook, usInstance, clickDelay, delay, usingBaf, session, /*discordbot,*/ badFinders, waittime, doNotList, useSkip;
 
 function testign() {
   if (config.username.trim() === '') {
@@ -109,9 +109,11 @@ usInstance = config.usInstance;
 percentOfTarget = config.percentOfTarget;
 relist = config.relist;
 ownAuctions = config.ownAuctions;
+useSkip = config.useSkip;
 badFinders = doNotList?.finders ? doNotList?.finders : ['USER'];
 dontListProfitOver = normalNumber(doNotList?.profitOver) ? normalNumber(doNotList?.profitOver) : 50_000_000;
 dontListItems = doNotList?.itemTags ? doNotList?.itemTags : ['HYPERION'];
+dontListSkins = doNotList?.skins || true;
 let ping = "";
 if (discordid) ping = `<@${discordid}>`;
 let lastSentCookie = 0;
@@ -672,30 +674,33 @@ async function start() {
   bot.state = 'moving';
   let firstGui;
   bot._client.on('open_window', async (window) => {
-    console.log(window);
     const windowID = window.windowId;
     const windowName = window.windowTitle;
+    debug(`Found new window ${windowName}`);
     packets.confirmClick(windowID);
     if (windowName === '{"italic":false,"extra":[{"text":"BIN Auction View"}],"text":""}' && bot.state !== 'listing') {
       firstGui = Date.now();
       const item = await itemLoad(31);
       const itemName = item.name;
-      console.log(`Item found ${itemName}`);
+      //console.log(`Item found ${itemName}`);
       switch (itemName) {
         case "gold_nugget":
           // = false;
-          info(`Clicking nugget ${windowID}`)
+          debug(`Clicking nugget ${windowID}`)
           packets.click(31, windowID, 371);
-          packets.click(11, windowID + 1, 159);
+          if (useSkip) packets.click(11, windowID + 1, 159);
         case 'poisonous_potato':
+          logmc(`§6[§bTPM§6] Can't afford flip, closing GUI.`)
           bot.closeWindow(bot.currentWindow);
           bot.state = null;
           break;
         case 'potato':
+          logmc(`§6[§bTPM§6] Potatoed, closing GUI.`)
           bot.closeWindow(bot.currentWindow);
           bot.state = null;
           break;
         case 'feather':
+          logmc(`§6[§bTPM§6] Potatoed, closing GUI.`)
           bot.closeWindow(bot.currentWindow);
           bot.state = null;
           break;
@@ -710,9 +715,8 @@ async function start() {
     } else if (windowName === '{"italic":false,"extra":[{"text":"Confirm Purchase"}],"text":""}') {
       logmc(`§6[§bTPM§6] §3Confirm at ${Date.now() - firstGui}ms`);
       await itemLoad(11);
-      ;
       betterClick(11, 0, 0);
-      info(`Clicking confirm ${window.windowId}`);
+      debug(`Clicking confirm ${window.windowId}`);
       if (bedSpam || bedFailed) {
         for (i = 1; i < 11; i++) {
           await sleep(30);
@@ -725,7 +729,6 @@ async function start() {
       }
       bot.state = null;
     }
-    console.log(`Window name ${windowName}`);
   })
 
   /*Window.on('newWindow', async window => {
@@ -1071,31 +1074,35 @@ async function start() {
           const profit = object.profit;
           if (!badFinders?.includes(lastPurchasedFinder)) {
             if (!dontListItems.includes(itemTag)) {
-              if (profit < dontListProfitOver) {
-                purchasedFinders.push(lastPurchasedFinder);
-                setTimeout(async () => {
-                  if (bot.state === null) {
-                    //bot.state = 'listing';
-                    if (fullInv) {
-                      logmc("§6[§bTPM§6] §cNot attempting to relist because your inventory is full. You will need to log in and clear your inventory to continue")
-                      bot.state = null;
-                    } else {
-                      if (relistCheck(currentlisted, totalslots, bot.state)) {
-                        bot.state = "listing";
-                        await sleep(500);
-                        relistHandler(lastPurchasedAhid, lastPurchasedTarget);
-                      } else {
-                        debug(`relist check didn't work`);
-                        stateManger.add({ id: lastPurchasedAhid, targets: lastPurchasedTarget }, Infinity, 'listing');
+              if (profit < dontListProfitOver && profit > 0) {
+                if (dontListSkin && (item.includes('✦') || item.toLowerCase().includes('skin'))) {
+                  purchasedFinders.push(lastPurchasedFinder);
+                  setTimeout(async () => {
+                    if (bot.state === null) {
+                      //bot.state = 'listing';
+                      if (fullInv) {
+                        logmc("§6[§bTPM§6] §cNot attempting to relist because your inventory is full. You will need to log in and clear your inventory to continue")
                         bot.state = null;
+                      } else {
+                        if (relistCheck(currentlisted, totalslots, bot.state)) {
+                          bot.state = "listing";
+                          await sleep(500);
+                          relistHandler(lastPurchasedAhid, lastPurchasedTarget);
+                        } else {
+                          debug(`relist check didn't work`);
+                          stateManger.add({ id: lastPurchasedAhid, targets: lastPurchasedTarget }, Infinity, 'listing');
+                          bot.state = null;
+                        }
                       }
+                    } else {
+                      debug(`bot state check didn't work`);
+                      stateManger.add({ id: lastPurchasedAhid, targets: lastPurchasedTarget }, Infinity, 'listing');
+                      bot.state = null;
                     }
-                  } else {
-                    debug(`bot state check didn't work`);
-                    stateManger.add({ id: lastPurchasedAhid, targets: lastPurchasedTarget }, Infinity, 'listing');
-                    bot.state = null;
-                  }
-                }, 10000);
+                  }, 10000);
+                } else {
+                  logmc(`§6[§bTPM§6] §c${match1[1]} is skinned or is a skin so it's not getting relisted. You can change this in your config file`);
+                }
               } else {
                 logmc(`§6[§bTPM§6] §c${match1[1]} is ${formatNumber(profit)} profit so it's not getting relisted. You can change this in your config file`);
               }
@@ -1174,7 +1181,7 @@ async function start() {
           }
         }
       }
-      sendFlip(webhookPricing[item].auctionId, profit, price, itemBed, utils.noColorCodes(match1[1]), webhookPricing[item].finder)
+      sendFlip(webhookPricing[item].auctionId, profit, price, itemBed, utils.noColorCodes(match1[1]), webhookPricing[item].finder, buyspeed)
       sendScoreboard();
       if (!config.relist) {
         setTimeout(async () => {
