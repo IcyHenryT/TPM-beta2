@@ -689,6 +689,7 @@ async function start() {
           debug(`Clicking nugget ${windowID}`)
           packets.click(31, windowID, 371);
           if (useSkip) packets.click(11, windowID + 1, 159);
+          break;
         case 'poisonous_potato':
           logmc(`§6[§bTPM§6] Can't afford flip, closing GUI.`)
           bot.closeWindow(bot.currentWindow);
