@@ -1076,7 +1076,7 @@ async function start() {
           if (!badFinders?.includes(lastPurchasedFinder)) {
             if (!dontListItems.includes(itemTag)) {
               if (profit < dontListProfitOver && profit > 0) {
-                if (dontListSkins && (item.includes('✦') || item.toLowerCase().includes('skin'))) {
+                if (dontListSkins && (!item.includes('✦') || !item.toLowerCase().includes('skin'))) {
                   purchasedFinders.push(lastPurchasedFinder);
                   setTimeout(async () => {
                     if (bot.state === null) {
